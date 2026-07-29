@@ -9,5 +9,29 @@ overestimating load requirements (generating more power than demand, incurring u
 
 The purpose of this project is to use historical load and weather data to predict future load requirement for the Electric Reliability
 Council of Texas (ERCOT), including uncertainty and assessment of whether uncertainty bands overlap with critical operational
-decision thresholds. In those cases, we will quantify the probability of exceedance and provide a system to decide whether to 
-generate or purchase electricity for the following day.
+decision thresholds. In those cases, we will estimate the probability that load exceeds operational thresholds and provide a system 
+to decide whether to generate or purchase electricity for the following day.
+
+## Data
+
+- ERCOT hourly load (2004–2026)
+
+## Repository Structure
+
+data/
+scripts/
+notebooks/
+src/
+
+## Workflow
+
+1. Download ERCOT files
+2. Build DuckDB database
+
+## Technologies
+
+Python
+DuckDB
+Pandas
+NumPy
+Git

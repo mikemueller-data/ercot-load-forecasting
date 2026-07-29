@@ -1,0 +1,17 @@
+# Large weather datasets
+data/raw/weather/
+data/processed/weather/
+
+# DuckDB Database files
+*.duckdb
+
+# Common scientific data formats
+*.nc
+*.grib
+*.grb
+
+# .DS_Store files
+.DS_Store
+
+# Excel lock files
+~$*
