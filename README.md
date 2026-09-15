@@ -31,6 +31,7 @@ src/
 ## Technologies
 
 Python
+SQL
 DuckDB
 Pandas
 NumPy

@@ -1,6 +1,7 @@
 #ETL script for ERCOT load tables
 from pathlib import Path
 import duckdb
+import holidays
 
 data_dir = Path(
     "/Users/mikemueller/GitHub/"
@@ -61,6 +62,7 @@ con.sql(create_raw_table_query)
 #3. MM/DD/YYYY HH:MM
 #4. 24:00 notation for hour ending
 #5. Add is_dst_repeat boolean for repeat 2AM hours when clocks fall back
+#6. Add day_of_week and is_weekend
 
 create_clean_table_query="""
     CREATE OR REPLACE TABLE ercot_load_clean AS
@@ -91,7 +93,7 @@ create_clean_table_query="""
                 ELSE TRY_STRPTIME(Hour_End, '%m/%d/%Y %H:%M')
             END
             )  + INTERVAL '30 minutes'
-        ) AS Hour_End,
+        ) AS local_timestamp,
 
         TRY_CAST(COAST AS DOUBLE) AS COAST,
         TRY_CAST(EAST AS DOUBLE) AS EAST,
@@ -102,12 +104,30 @@ create_clean_table_query="""
         TRY_CAST(SOUTH_C AS DOUBLE) AS SOUTH_C,
         TRY_CAST(WEST AS DOUBLE) AS WEST,
         TRY_CAST(ERCOT AS DOUBLE) AS ERCOT,
-        Hour_End LIKE '% DST' AS is_dst_repeat
-
+        Hour_End LIKE '% DST' AS is_dst_repeat,
+        EXTRACT(DOW FROM local_timestamp) AS day_of_week,
+        CASE
+            WHEN EXTRACT(DOW FROM local_timestamp) IN (0, 6) THEN TRUE
+            ELSE FALSE
+        END AS is_weekend
     FROM ercot_load_raw
 """
 ###Create clean data table
 con.sql(create_clean_table_query)
+
+#Add US Holidays
+df=con.sql("""SELECT * FROM ercot_load_clean""").df()
+us_holidays = holidays.US(years=range(2002, 2027))
+print("US HOLIDAYS: ",us_holidays)
+df['is_holiday']=df['local_timestamp'].dt.date.isin(us_holidays.keys())
+
+con.register("clean_df", df)
+
+con.sql("""
+    CREATE OR REPLACE TABLE ercot_load_clean AS
+    SELECT *
+    FROM clean_df
+""")
 
 print(
     con.sql("""
@@ -152,6 +172,8 @@ print(
     DESCRIBE ercot_load_raw
     """)
 )
+
+print(database_path)
 
 
 con.close()
