@@ -2,6 +2,7 @@
 from pathlib import Path
 import duckdb
 import holidays
+import pandas as pd
 
 data_dir = Path(
     "/Users/mikemueller/GitHub/"
@@ -61,8 +62,18 @@ con.sql(create_raw_table_query)
 #2. ISO timestamps
 #3. MM/DD/YYYY HH:MM
 #4. 24:00 notation for hour ending
-#5. Add is_dst_repeat boolean for repeat 2AM hours when clocks fall back
+#5. Add dst_flag boolean for DST fallback markers in raw ERCOT files (2017 and later)
 #6. Add day_of_week and is_weekend
+#7. Drop duplicate rows (May 2026 was fully duplicated)
+#8. Add fallback_flag
+
+# ERCOT local hour-ending conventions around spring DST transitions
+# differ across historical source-file eras:
+# pre-2017: local timestamps jump 01:00 -> 03:00
+# 2017+:    local timestamps jump 02:00 -> 04:00
+#
+# UTC is constructed as a continuous hourly sequence, avoiding
+# ambiguity from historical local-time/DST formatting conventions.
 
 create_clean_table_query="""
     CREATE OR REPLACE TABLE ercot_load_clean AS
@@ -104,7 +115,7 @@ create_clean_table_query="""
         TRY_CAST(SOUTH_C AS DOUBLE) AS SOUTH_C,
         TRY_CAST(WEST AS DOUBLE) AS WEST,
         TRY_CAST(ERCOT AS DOUBLE) AS ERCOT,
-        Hour_End LIKE '% DST' AS is_dst_repeat,
+        Hour_End LIKE '% DST' AS dst_flag,
         EXTRACT(DOW FROM local_timestamp) AS day_of_week,
         CASE
             WHEN EXTRACT(DOW FROM local_timestamp) IN (0, 6) THEN TRUE
@@ -116,12 +127,68 @@ create_clean_table_query="""
 con.sql(create_clean_table_query)
 
 #Add US Holidays
+
 df=con.sql("""SELECT * FROM ercot_load_clean""").df()
 us_holidays = holidays.US(years=range(2002, 2027))
 print("US HOLIDAYS: ",us_holidays)
 df['is_holiday']=df['local_timestamp'].dt.date.isin(us_holidays.keys())
 
+#May 2026 and June 1 2026 have duplicate rows. Drop them.
+
+df=df.drop_duplicates()
+
+#Locl time falls back each fall, leading to legitimate repeat 2AM values on the fallback day. Let's flag it.
+
+df['fallback_flag'] = df['local_timestamp'].duplicated()
+
+#Add UTC timestamp starting from Jan 1, 2004 1am ERCOT local time. 
+#This only works because each row is exactly 1 hour and none are skipped or missing in the local dataset. 
+
+df['utc_timestamp'] = pd.date_range(
+    start='2004-01-01 08:00',
+    periods=len(df),
+    freq='h',
+    tz='UTC'
+)
+
+print(df['utc_timestamp'].dt.tz)
+print(df['utc_timestamp'].head())
+
+#Add day_of_year feature
+df['day_of_year'] = df['local_timestamp'].dt.dayofyear
+
+#Reorder columns for organization
+df = df[
+    [
+        'local_timestamp',
+        'utc_timestamp',
+        'day_of_year',
+        'day_of_week',
+        'is_weekend',
+        'is_holiday',
+        'fallback_flag',
+        'dst_flag',
+        'COAST',
+        'EAST',
+        'FAR_WEST',
+        'NORTH',
+        'NORTH_C',
+        'SOUTHERN',
+        'SOUTH_C',
+        'WEST',
+        'ERCOT'
+    ]
+]
+
+#Write to table
 con.register("clean_df", df)
+
+
+
+
+
+
+
 
 con.sql("""
     CREATE OR REPLACE TABLE ercot_load_clean AS
@@ -175,5 +242,6 @@ print(
 
 print(database_path)
 
+print(df.columns)
 
 con.close()
