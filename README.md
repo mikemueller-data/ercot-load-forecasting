@@ -42,3 +42,6 @@ Git
 
 09-16-26
 The load ETL pipeline ingests historical ERCOT native-load files and standardizes historical timestamp formats into a canonical hourly dataset. The pipeline removes exact duplicate observations (May 2026), preserves source missing values, and provides both ERCOT local timestamps and a continuous UTC time axis for later weather-data alignment. Calendar metadata includes day-of-year, day-of-week, weekend, holiday, and DST/fallback indicators.
+
+09-17-26
+Added load lag features for ERCOT and each region.
